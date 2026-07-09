@@ -1,0 +1,21 @@
+# Credentials
+serviceAccountKey.json
+
+# Dependency directories
+node_modules/
+
+# Log files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Private Environments & Uploads
+.env
+public/uploads/
+test-images/

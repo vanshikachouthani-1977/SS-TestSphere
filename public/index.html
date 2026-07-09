@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SS TestSphere | Multi-Agent QA Orchestration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background blobs -->
+  <div class="bg-blob blob-1"></div>
+  <div class="bg-blob blob-2"></div>
+  <div class="bg-blob blob-3"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header-centered">
+      <div class="logo-icon-centered">🪐</div>
+      <h1 class="logo-title-centered">SS TestSphere</h1>
+      <p class="logo-subtitle-centered">Multi-Agent QA Orchestration Dashboard</p>
+    </header>
+
+    <div class="main-layout">
+      <!-- Sidebar / Config / History -->
+      <aside class="sidebar">
+        <!-- New Run Config -->
+        <section class="card glass-card form-section">
+          <h2>🚀 Trigger QA Pipeline</h2>
+          <form id="runForm">
+            <!-- 1. Selection checkboxes on the upper side -->
+            <div class="form-group">
+              <label>Validation Modules to Execute</label>
+              <div class="checkbox-group">
+                <label class="checkbox-container">
+                  <input type="checkbox" id="runUI" checked>
+                  <span class="checkmark"></span>
+                  <span class="label-text">🎨 UI & Security Verification</span>
+                </label>
+                <label class="checkbox-container">
+                  <input type="checkbox" id="runBackend" checked>
+                  <span class="checkmark"></span>
+                  <span class="label-text">⚙️ Backend & Code Verification</span>
+                </label>
+              </div>
+            </div>
+
+            <!-- 2. UI Sub-panel (below selection, toggled by runUI) -->
+            <div id="uiInputsContainer" class="form-sub-panel">
+              <div class="form-group">
+                <label>Figma Mockup Input</label>
+                <div class="tab-control" data-target="figma">
+                  <button type="button" class="tab-btn active" data-tab="link">Link</button>
+                  <button type="button" class="tab-btn" data-tab="upload">Upload</button>
+                </div>
+                <div class="tab-content" id="figma-tab-link">
+                  <input type="url" id="figmaUrl" value="https://figma.com/file/ss-shoppersstop-qa-spec" placeholder="https://figma.com/file/mockup">
+                </div>
+                <div class="tab-content hidden" id="figma-tab-upload">
+                  <div class="drop-zone" id="figmaDropZone">
+                    <div class="drop-zone-prompt">📁 Drag & Drop or Click to Upload Mockup</div>
+                    <input type="file" id="figmaFile" class="drop-zone-file" accept="image/*">
+                    <div class="preview-container hidden" id="figmaPreview">
+                      <img src="" alt="Figma Mockup Preview" class="preview-img">
+                      <button type="button" class="remove-preview-btn" data-target="figma">✖</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label>Live App Target Input</label>
+                <div class="tab-control" data-target="app">
+                  <button type="button" class="tab-btn active" data-tab="link">Link</button>
+                  <button type="button" class="tab-btn" data-tab="upload">Upload</button>
+                </div>
+                <div class="tab-content" id="app-tab-link">
+                  <input type="url" id="appUrl" value="https://ss-shoppersstop-staging.example.com" placeholder="https://staging.example.com">
+                </div>
+                <div class="tab-content hidden" id="app-tab-upload">
+                  <div class="drop-zone" id="appDropZone">
+                    <div class="drop-zone-prompt">📁 Drag & Drop or Click to Upload Screenshot</div>
+                    <input type="file" id="appFile" class="drop-zone-file" accept="image/*">
+                    <div class="preview-container hidden" id="appPreview">
+                      <img src="" alt="App Screenshot Preview" class="preview-img">
+                      <button type="button" class="remove-preview-btn" data-target="app">✖</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 3. Backend Sub-panel (below selection, toggled by runBackend) -->
+            <div id="backendInputsContainer" class="form-sub-panel">
+              <div class="form-group">
+                <label for="repoUrl">Repository URL (GitHub) *</label>
+                <input type="url" id="repoUrl" required value="https://github.com/vanshikachouthani-1977/SS-TestSphere.git" placeholder="https://github.com/user/repo.git">
+              </div>
+
+              <div class="form-group">
+                <label for="apiDocs">API Swagger/Doc URL</label>
+                <input type="url" id="apiDocs" value="https://ss-shoppersstop-staging.example.com/swagger.json" placeholder="https://api.example.com/swagger.json">
+              </div>
+            </div>
+
+            <!-- 4. User Stories -->
+            <div class="form-group">
+              <label for="userStories">Test Scenarios / User Stories (comma-separated)</label>
+              <textarea id="userStories" rows="3" placeholder="User can successfully register and login, Products can be fetched and display correctly in UI, Security headers must prevent framing attacks"></textarea>
+            </div>
+
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+              <span>Execute QA Run</span>
+              <div class="spinner hidden"></div>
+            </button>
+          </form>
+        </section>
+
+        <!-- Run History -->
+        <section class="card glass-card history-section">
+          <h2>📊 Execution History</h2>
+          <div id="runsHistoryList" class="history-list">
+            <div class="loading-placeholder">Loading runs...</div>
+          </div>
+        </section>
+      </aside>
+
+      <!-- Main Dashboard / Detail View -->
+      <main class="dashboard-main">
+        <!-- No Run Selected View -->
+        <div id="noSelectionView" class="no-selection-view">
+          <div class="placeholder-icon">🔮</div>
+          <h3>No Run Selected</h3>
+          <p>Please select a run from the history or configure and trigger a new QA pipeline execution.</p>
+        </div>
+
+        <!-- Active Run Detail View -->
+        <div id="runDetailView" class="run-detail-view hidden">
+          <!-- Run Status Header -->
+          <div class="detail-header card glass-card">
+            <div class="header-info">
+              <div class="run-meta">
+                <span id="detailRunId" class="run-id-badge">run_1783495086879</span>
+                <span id="detailStatus" class="status-badge status-pending">PENDING</span>
+              </div>
+              <p id="detailTime">Started: --:--:-- | Completed: --:--:--</p>
+            </div>
+            <div class="header-actions">
+              <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+            </div>
+          </div>
+
+          <!-- Report Overview -->
+          <div id="reportOverviewCard" class="report-overview card glass-card hidden">
+            <h2>📑 Consolidated QA Report</h2>
+            <div class="report-grid">
+              <!-- Radial Gauge -->
+              <div class="score-card">
+                <div class="radial-progress-container">
+                  <svg class="radial-progress" viewBox="0 0 120 120">
+                    <circle class="bg" cx="60" cy="60" r="50"></circle>
+                    <circle id="scoreProgressCircle" class="fg" cx="60" cy="60" r="50" style="stroke-dashoffset: 314;"></circle>
+                  </svg>
+                  <div class="radial-text">
+                    <span id="qualityScoreVal">100</span>
+                    <p>Score</p>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Recommendation Card -->
+              <div class="rec-card">
+                <h3>Deployment Recommendation</h3>
+                <div id="recBadge" class="rec-badge badge-go">GO</div>
+                <p id="reportSummary">Summary loading...</p>
+              </div>
+            </div>
+            
+            <!-- Quality Score Deductions Breakdown -->
+            <div id="deductionsContainer" class="deductions-container hidden">
+              <h3>Percentage Quality Score Breakdown</h3>
+              <table class="deductions-table">
+                <thead>
+                  <tr>
+                    <th>Verification Module</th>
+                    <th>Deduction</th>
+                    <th>Reasoning / Findings</th>
+                  </tr>
+                </thead>
+                <tbody id="deductionsTableBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Verification Checklist Requirements & Test Cases -->
+            <div id="testCasesContainer" class="test-cases-container hidden">
+              <h3>Verification Checklist Requirements & Test Cases</h3>
+              <div class="test-cases-summary">
+                <span id="coverageBadge" class="coverage-badge">100% Passed</span>
+              </div>
+              <table class="test-cases-table">
+                <thead>
+                  <tr>
+                    <th>Test Case / User Story</th>
+                    <th>Status</th>
+                    <th>Gemini Reason / Verification Detail</th>
+                  </tr>
+                </thead>
+                <tbody id="testCasesTableBody"></tbody>
+              </table>
+            </div>
+
+            <!-- Visual Comparison Side-by-Side -->
+            <div id="visualDiffContainer" class="visual-diff-container hidden">
+              <h3>🎨 Visual Design vs. Staging Screenshot Comparison</h3>
+              <div class="comparison-row">
+                <div class="comparison-box">
+                  <span class="box-label">Figma Design Mockup</span>
+                  <div class="image-wrapper" id="diffMockupWrapper">
+                    <span class="img-placeholder">No Design Mockup Provided</span>
+                  </div>
+                </div>
+                <div class="comparison-box">
+                  <span class="box-label">Staging/App Screenshot</span>
+                  <div class="image-wrapper" id="diffScreenshotWrapper">
+                    <span class="img-placeholder">No App Screenshot Provided</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Pipeline Flow Visualizer -->
+          <div class="pipeline-visualizer card glass-card">
+            <h2>🔗 Orchestration Pipeline Flow (Fork-Join)</h2>
+            <p class="section-desc">Real-time status tracking of all 14 specialized downstreams. Click a node to view its output details.</p>
+            
+            <div class="flowchart-container">
+              <!-- Orchestrator (Root) -->
+              <div class="flow-row center">
+                <div class="flow-node active-node" id="node-Orchestrator" data-agent="Orchestrator">
+                  <div class="node-icon">🧠</div>
+                  <div class="node-label">Orchestrator</div>
+                  <div class="node-status">ACTIVE</div>
+                </div>
+              </div>
+
+              <!-- Flow line -->
+              <div class="flow-line-vertical"></div>
+
+              <!-- App Understanding -->
+              <div class="flow-row center">
+                <div class="flow-node" id="node-AppUnderstandingAgent" data-agent="AppUnderstandingAgent">
+                  <div class="node-icon">🔍</div>
+                  <div class="node-label">App Understanding</div>
+                  <div class="node-status">PENDING</div>
+                </div>
+              </div>
+
+              <!-- Fork container -->
+              <div class="fork-branch-lines"></div>
+
+              <!-- Parallel Groups -->
+              <div class="parallel-grid">
+                <!-- UI Branch -->
+                <div class="branch-col">
+                  <h4 class="branch-title">🎨 UI Validation Group</h4>
+                  <div class="nodes-container">
+                    <div class="flow-node" id="node-VisualTestingAgent" data-agent="VisualTestingAgent">
+                      <div class="node-icon">🖼️</div>
+                      <div class="node-label">Visual Testing</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-OCRTestingAgent" data-agent="OCRTestingAgent">
+                      <div class="node-icon">🔤</div>
+                      <div class="node-label">OCR Text Accuracy</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-FunctionalUIAgent" data-agent="FunctionalUIAgent">
+                      <div class="node-icon">🖱️</div>
+                      <div class="node-label">Functional UI</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-UserFlowAgent" data-agent="UserFlowAgent">
+                      <div class="node-icon">🚶</div>
+                      <div class="node-label">User-Flow E2E</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                  </div>
+                  <div class="join-line"></div>
+                  <div class="flow-node" id="node-SecurityTestingAgent" data-agent="SecurityTestingAgent">
+                    <div class="node-icon">🛡️</div>
+                    <div class="node-label">Security Audit</div>
+                    <div class="node-status">PENDING</div>
+                  </div>
+                </div>
+
+                <!-- Backend/Logic Branch -->
+                <div class="branch-col">
+                  <h4 class="branch-title">⚙️ Backend/Logic Group</h4>
+                  <div class="nodes-container">
+                    <div class="flow-node" id="node-BackendAPIAgent" data-agent="BackendAPIAgent">
+                      <div class="node-icon">🌐</div>
+                      <div class="node-label">Backend API</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-DBValidationAgent" data-agent="DBValidationAgent">
+                      <div class="node-icon">💾</div>
+                      <div class="node-label">DB Validation</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-CodeAnalysisAgent" data-agent="CodeAnalysisAgent">
+                      <div class="node-icon">🧬</div>
+                      <div class="node-label">Code Analysis</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                    <div class="flow-node" id="node-AITestGenAgent" data-agent="AITestGenAgent">
+                      <div class="node-icon">🤖</div>
+                      <div class="node-label">AI Test Gen</div>
+                      <div class="node-status">PENDING</div>
+                    </div>
+                  </div>
+                  <div class="join-line"></div>
+                  <div class="flow-node" id="node-PerformanceTestingAgent" data-agent="PerformanceTestingAgent">
+                    <div class="node-icon">⚡</div>
+                    <div class="node-label">Performance Check</div>
+                    <div class="node-status">PENDING</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Join container -->
+              <div class="join-branch-lines"></div>
+
+              <!-- Requirement Coverage -->
+              <div class="flow-row center">
+                <div class="flow-node" id="node-ReqCoverageAgent" data-agent="ReqCoverageAgent">
+                  <div class="node-icon">📋</div>
+                  <div class="node-label">Req Coverage</div>
+                  <div class="node-status">PENDING</div>
+                </div>
+              </div>
+
+              <div class="flow-line-vertical"></div>
+
+              <!-- RCA -->
+              <div class="flow-row center">
+                <div class="flow-node" id="node-RCAAgent" data-agent="RCAAgent">
+                  <div class="node-icon">🔍</div>
+                  <div class="node-label">Root Cause Analysis</div>
+                  <div class="node-status">PENDING</div>
+                </div>
+              </div>
+
+              <div class="flow-line-vertical"></div>
+
+              <!-- Report Gen -->
+              <div class="flow-row center">
+                <div class="flow-node" id="node-ReportGenAgent" data-agent="ReportGenAgent">
+                  <div class="node-icon">📄</div>
+                  <div class="node-label">Report Gen</div>
+                  <div class="node-status">PENDING</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Dynamic Agent Output Detail Modal/Card -->
+          <div id="agentDetailCard" class="agent-detail-card card glass-card hidden">
+            <div class="card-header">
+              <h3 id="agentDetailName">Agent Detail</h3>
+              <button id="closeAgentDetailBtn" class="close-btn">✖</button>
+            </div>
+            <div class="agent-detail-content">
+              <p><strong>Status:</strong> <span id="agentDetailStatus">PENDING</span></p>
+              <p><strong>Started:</strong> <span id="agentDetailStart">--</span></p>
+              <p><strong>Completed:</strong> <span id="agentDetailEnd">--</span></p>
+              <div id="agentDetailErrorContainer" class="hidden error-container">
+                <p><strong>Error Details:</strong></p>
+                <pre id="agentDetailErrorText"></pre>
+              </div>
+              <p><strong>Outputs:</strong></p>
+              <pre id="agentDetailOutputText">No outputs recorded yet.</pre>
+            </div>
+          </div>
+
+          <!-- Defects List -->
+          <div id="defectsCard" class="defects-card card glass-card hidden">
+            <h2>⚠️ Identified Defects & Vulnerabilities</h2>
+            <div class="defects-table-wrapper">
+              <table class="defects-table">
+                <thead>
+                  <tr>
+                    <th>Type</th>
+                    <th>File / Context</th>
+                    <th>Severity</th>
+                    <th>Defect Details</th>
+                  </tr>
+                </thead>
+                <tbody id="defectsTableBody">
+                  <!-- Injected via JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Live Log Console -->
+          <div class="log-console card glass-card">
+            <h2>🗒️ Live Orchestration Terminal Stream</h2>
+            <div class="console-body" id="consoleBody">
+              <div class="console-line system-line">[System] Console initialized. Awaiting logs...</div>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
