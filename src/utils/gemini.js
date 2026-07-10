@@ -95,7 +95,11 @@ async function callGemini(contents, jsonMode = false, systemInstruction = null) 
   
   if (jsonMode) {
     try {
-      return JSON.parse(content);
+      let cleanedContent = content.trim();
+      if (cleanedContent.startsWith('```')) {
+        cleanedContent = cleanedContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      }
+      return JSON.parse(cleanedContent.trim());
     } catch (err) {
       console.error('Failed to parse JSON response from Gemini:', content);
       throw new Error('Gemini returned invalid JSON: ' + err.message);
