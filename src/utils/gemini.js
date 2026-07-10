@@ -1,23 +1,14 @@
-const { GoogleAuth } = require('google-auth-library');
-
-let authInstance = null;
-
-async function getVertexTokenAndProject() {
-  if (!authInstance) {
-    authInstance = new GoogleAuth({
-      scopes: 'https://www.googleapis.com/auth/cloud-platform'
-    });
-  }
-  const client = await authInstance.getClient();
-  const projectId = await authInstance.getProjectId();
-  const tokenResponse = await client.getAccessToken();
-  return {
-    projectId,
-    token: tokenResponse.token
-  };
-}
+/**
+ * Utility helper to make requests to the Gemini API
+ */
+const fs = require('fs');
 
 async function callGemini(contents, jsonMode = false, systemInstruction = null) {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY is not defined in environment variables.');
+  }
+
   // Format contents to match Gemini API structure if they are in role/content format
   let formattedContents = [];
   if (Array.isArray(contents)) {
@@ -81,31 +72,23 @@ async function callGemini(contents, jsonMode = false, systemInstruction = null) 
     };
   }
 
-  // Obtain ADC Token and GCP Project ID
-  const { projectId, token } = await getVertexTokenAndProject();
-  const region = 'us-central1';
-  const modelName = 'gemini-2.5-flash';
-
-  const url = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${modelName}:generateContent`;
-
-  const response = await fetch(url, {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify(payload)
   });
 
   if (!response.ok) {
     const errorText = await response.text();
-    throw new Error(`Vertex AI error: Status ${response.status} - ${errorText}`);
+    throw new Error(`Gemini API error: Status ${response.status} - ${errorText}`);
   }
 
   const data = await response.json();
   
   if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-    throw new Error('Vertex AI returned an empty response candidate list.');
+    throw new Error('Gemini API returned an empty response candidate list.');
   }
 
   const content = data.candidates[0].content.parts[0].text;
@@ -114,8 +97,8 @@ async function callGemini(contents, jsonMode = false, systemInstruction = null) 
     try {
       return JSON.parse(content);
     } catch (err) {
-      console.error('Failed to parse JSON response from Vertex AI:', content);
-      throw new Error('Vertex AI returned invalid JSON: ' + err.message);
+      console.error('Failed to parse JSON response from Gemini:', content);
+      throw new Error('Gemini returned invalid JSON: ' + err.message);
     }
   }
 
