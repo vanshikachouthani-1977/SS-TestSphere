@@ -72,41 +72,64 @@ async function callGemini(contents, jsonMode = false, systemInstruction = null) 
     };
   }
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(payload)
-  });
+  const maxRetries = 3;
+  let delay = 2000; // start with 2 seconds
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: Status ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  
-  if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
-    throw new Error('Gemini API returned an empty response candidate list.');
-  }
-
-  const content = data.candidates[0].content.parts[0].text;
-  
-  if (jsonMode) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      let cleanedContent = content.trim();
-      if (cleanedContent.startsWith('```')) {
-        cleanedContent = cleanedContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=${apiKey}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        
+        // If rate limited or service is unavailable, retry
+        if ((response.status === 503 || response.status === 429) && attempt < maxRetries) {
+          console.warn(`Gemini API returned status ${response.status}. Retrying in ${delay}ms... (Attempt ${attempt}/${maxRetries})`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay *= 2;
+          continue;
+        }
+        
+        throw new Error(`Gemini API error: Status ${response.status} - ${errorText}`);
       }
-      return JSON.parse(cleanedContent.trim());
-    } catch (err) {
-      console.error('Failed to parse JSON response from Gemini:', content);
-      throw new Error('Gemini returned invalid JSON: ' + err.message);
+
+      const data = await response.json();
+      
+      if (!data.candidates || data.candidates.length === 0 || !data.candidates[0].content) {
+        throw new Error('Gemini API returned an empty response candidate list.');
+      }
+
+      const content = data.candidates[0].content.parts[0].text;
+      
+      if (jsonMode) {
+        try {
+          let cleanedContent = content.trim();
+          if (cleanedContent.startsWith('```')) {
+            cleanedContent = cleanedContent.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
+          }
+          return JSON.parse(cleanedContent.trim());
+        } catch (err) {
+          console.error('Failed to parse JSON response from Gemini:', content);
+          throw new Error('Gemini returned invalid JSON: ' + err.message);
+        }
+      }
+
+      return content;
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      console.warn(`Error in callGemini (Attempt ${attempt}/${maxRetries}): ${error.message}. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      delay *= 2;
     }
   }
-
-  return content;
 }
 
 module.exports = {
