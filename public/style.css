@@ -462,7 +462,7 @@ body {
   cursor: pointer;
   transition: var(--transition-smooth);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  min-width: 170px;
+  width: 260px;
 }
 .flow-node:hover {
   background: rgba(255, 255, 255, 0.06);
