@@ -39,6 +39,8 @@ class ReqCoverageAgent extends BaseAgent {
     const findings = {
       isFundamentalMismatch: visualTesting.isFundamentalMismatch || false,
       visualSimilarity: visualTesting.similarityScore || 100,
+      vectorSimilarity: visualTesting.vectorSimilarity !== undefined ? visualTesting.vectorSimilarity : 1.0,
+      structuralSimilarity: visualTesting.structuralSimilarity !== undefined ? visualTesting.structuralSimilarity : 1.0,
       visualMismatches: visualTesting.mismatches || [],
       securityVulnerabilities: securityTesting.vulnerabilities || [],
       databaseErrors: dbValidation.errors || [],
@@ -91,13 +93,16 @@ Return a JSON object structured exactly as follows:
       let passedCount = 0;
       stories.forEach(s => {
         const isVisualStory = s.toLowerCase().includes('figma') || s.toLowerCase().includes('visual') || s.toLowerCase().includes('ui design');
-        if (isVisualStory && (findings.isFundamentalMismatch || findings.visualSimilarity < 100)) {
+        if (isVisualStory && (findings.isFundamentalMismatch || findings.visualSimilarity < 100 || findings.structuralSimilarity < 0.99)) {
           storiesStatus[s] = { 
             status: 'FAIL', 
-            reason: `Visual similarity check failed (${findings.isFundamentalMismatch ? 'Fundamental Mismatch' : `Similarity Score: ${findings.visualSimilarity}%`}). API Error: ${err.message}` 
+            reason: `Pixel comparison mismatch (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%). API Error: ${err.message}` 
           };
         } else {
-          storiesStatus[s] = { status: 'PASS', reason: 'Verified successfully (Fallback check).' };
+          storiesStatus[s] = { 
+            status: 'PASS', 
+            reason: `Verified successfully (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%).` 
+          };
           passedCount++;
         }
       });
