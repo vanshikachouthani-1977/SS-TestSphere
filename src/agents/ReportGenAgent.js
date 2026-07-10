@@ -97,10 +97,19 @@ class ReportGenAgent extends BaseAgent {
       }
 
       scoreDeductions.push({
-        module: 'UI & Security Verification (Visual Similarity)',
+        module: 'UI Verification (Visual Similarity)',
         deduction,
         reason: reasons.join(' ') || 'Visual similarity score below 100%.'
       });
+
+      if (visualTesting.isFundamentalMismatch) {
+        defects.push({
+          type: 'visual',
+          file: 'Figma Mockup Comparison',
+          severity: 'Critical',
+          message: 'Fundamental Mismatch: The live app page implementation is completely different from the expected Figma mockup design.'
+        });
+      }
 
       if (visualTesting.mismatches) {
         for (const mis of visualTesting.mismatches) {

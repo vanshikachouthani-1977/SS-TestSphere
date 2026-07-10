@@ -19,9 +19,9 @@ class ReqCoverageAgent extends BaseAgent {
       if (inputs.runUI !== false) {
         stories.push('UI design matches Figma mockup design layout');
         stories.push('OCR spelling accuracy verification of UI text');
-        stories.push('Security policies and headers compliance audit');
       }
       if (inputs.runBackend !== false) {
+        stories.push('Security policies and headers compliance audit');
         stories.push('Database table connection and operation health checks');
         stories.push('Static code standards and linter checks compliance');
         stories.push('API endpoint structure and documentation verification');
@@ -37,6 +37,7 @@ class ReqCoverageAgent extends BaseAgent {
     const codeAnalysis = backendBranchOut.backendResults ? backendBranchOut.backendResults[2] : {};
 
     const findings = {
+      isFundamentalMismatch: visualTesting.isFundamentalMismatch || false,
       visualSimilarity: visualTesting.similarityScore || 100,
       visualMismatches: visualTesting.mismatches || [],
       securityVulnerabilities: securityTesting.vulnerabilities || [],
@@ -46,6 +47,9 @@ class ReqCoverageAgent extends BaseAgent {
 
     const prompt = `You are the Requirement Coverage Agent in SS TestSphere.
 Given the following list of test cases / user stories and the collected verification findings, evaluate each item. Mark it as 'PASS' if there are no major matching defects, or 'FAIL' if there are warnings or errors directly related to that story. Provide a short specific reason.
+
+CRITICAL RULE FOR SCREEN MISMATCHES:
+If "isFundamentalMismatch" is true, you MUST grade any test case/story verifying mockup visual layout matches (e.g. "UI design matches Figma mockup design layout") as FAIL. Set the reason to explicitly explain that a fundamental mismatch was detected.
 
 Test Cases to verify:
 ${stories.map((s, idx) => `${idx + 1}. ${s}`).join('\n')}
@@ -84,11 +88,22 @@ Return a JSON object structured exactly as follows:
       await this.log('error', `Failed requirement coverage check: ${err.message}`);
       // Fallback
       const storiesStatus = {};
+      let passedCount = 0;
       stories.forEach(s => {
-        storiesStatus[s] = { status: 'PASS', reason: 'Verified successfully.' };
+        const isVisualStory = s.toLowerCase().includes('figma') || s.toLowerCase().includes('visual') || s.toLowerCase().includes('ui design');
+        if (isVisualStory && (findings.isFundamentalMismatch || findings.visualSimilarity < 100)) {
+          storiesStatus[s] = { 
+            status: 'FAIL', 
+            reason: `Visual similarity check failed (${findings.isFundamentalMismatch ? 'Fundamental Mismatch' : `Similarity Score: ${findings.visualSimilarity}%`}). API Error: ${err.message}` 
+          };
+        } else {
+          storiesStatus[s] = { status: 'PASS', reason: 'Verified successfully (Fallback check).' };
+          passedCount++;
+        }
       });
+      const coveragePercentage = Math.round((passedCount / stories.length) * 100);
       return {
-        coveragePercentage: 100,
+        coveragePercentage,
         storiesStatus
       };
     }
