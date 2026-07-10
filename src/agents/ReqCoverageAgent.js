@@ -93,15 +93,23 @@ Return a JSON object structured exactly as follows:
       let passedCount = 0;
       stories.forEach(s => {
         const isVisualStory = s.toLowerCase().includes('figma') || s.toLowerCase().includes('visual') || s.toLowerCase().includes('ui design');
-        if (isVisualStory && (findings.isFundamentalMismatch || findings.visualSimilarity < 100 || findings.structuralSimilarity < 0.99)) {
-          storiesStatus[s] = { 
-            status: 'FAIL', 
-            reason: `Pixel comparison mismatch (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%). API Error: ${err.message}` 
-          };
+        if (isVisualStory) {
+          if (findings.isFundamentalMismatch || findings.visualSimilarity < 100 || findings.structuralSimilarity < 0.99) {
+            storiesStatus[s] = { 
+              status: 'FAIL', 
+              reason: `Pixel comparison mismatch (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%). API Error: ${err.message}` 
+            };
+          } else {
+            storiesStatus[s] = { 
+              status: 'PASS', 
+              reason: `Verified successfully (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%).` 
+            };
+            passedCount++;
+          }
         } else {
           storiesStatus[s] = { 
             status: 'PASS', 
-            reason: `Verified successfully (Vector Similarity: ${(findings.vectorSimilarity * 100).toFixed(1)}%, Structural Similarity: ${(findings.structuralSimilarity * 100).toFixed(1)}%).` 
+            reason: 'Verified successfully (Fallback check).' 
           };
           passedCount++;
         }
