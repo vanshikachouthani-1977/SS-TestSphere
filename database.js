@@ -1,53 +1,116 @@
 require('dotenv').config();
-const admin = require('firebase-admin');
-const { getFirestore } = require('firebase-admin/firestore');
 const path = require('path');
 const fs = require('fs');
+const { initializeApp } = require('firebase/app');
+const { 
+  getFirestore, 
+  collection, 
+  doc, 
+  getDoc, 
+  getDocs, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  addDoc, 
+  query, 
+  orderBy, 
+  limit 
+} = require('firebase/firestore');
 
-// Load service account key from env or file
-let serviceAccount;
-if (process.env.FIREBASE_SERVICE_ACCOUNT_B64) {
-  try {
-    const decoded = Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_B64, 'base64').toString('utf8');
-    serviceAccount = JSON.parse(decoded);
-  } catch (error) {
-    console.error('Error parsing FIREBASE_SERVICE_ACCOUNT_B64 from environment:', error);
-    process.exit(1);
+// User Provided Firebase Web Configuration
+const firebaseConfig = {
+  apiKey: "AIzaSyB0p1n2dNzrPlNfmDUzRIcLD_-fuF0o0AA",
+  authDomain: "shoppersstop-72ddf.firebaseapp.com",
+  projectId: "shoppersstop-72ddf",
+  storageBucket: "shoppersstop-72ddf.firebasestorage.app",
+  messagingSenderId: "510002731119",
+  appId: "1:510002731119:web:ed79881fed8ac82252559a",
+  measurementId: "G-VW8TT1DZP4"
+};
+
+// ============================================================================
+// COMPATIBILITY ADAPTER CLASSES FOR FIREBASE CLIENT SDK (Chainable Interface)
+// ============================================================================
+
+class DocumentReferenceCompat {
+  constructor(clientDb, basePath, docId) {
+    this.clientDb = clientDb;
+    this.basePath = basePath;
+    this.id = docId;
+    this.ref = doc(clientDb, basePath, docId);
   }
-} else if (process.env.FIREBASE_SERVICE_ACCOUNT_JSON) {
-  try {
-    let jsonStr = process.env.FIREBASE_SERVICE_ACCOUNT_JSON.trim();
-    if (jsonStr.startsWith("'") && jsonStr.endsWith("'")) {
-      jsonStr = jsonStr.slice(1, -1);
-    }
-    serviceAccount = JSON.parse(jsonStr);
-  } catch (error) {
-    console.error('Error parsing FIREBASE_SERVICE_ACCOUNT_JSON from environment:', error);
-    process.exit(1);
+
+  async get() {
+    const snap = await getDoc(this.ref);
+    return {
+      exists: snap.exists(),
+      data: () => snap.data()
+    };
   }
-} else {
-  const serviceAccountPath = path.join(__dirname, 'serviceAccountKey.json');
-  try {
-    serviceAccount = require(serviceAccountPath);
-  } catch (error) {
-    console.error('Error loading serviceAccountKey.json. Please make sure the file exists or credentials are set in env.');
-    process.exit(1);
+
+  async set(data, options = {}) {
+    await setDoc(this.ref, data, options);
+    return { writeTime: new Date() };
+  }
+
+  async update(data) {
+    await updateDoc(this.ref, data);
+    return { writeTime: new Date() };
+  }
+
+  async delete() {
+    await deleteDoc(this.ref);
+    return { writeTime: new Date() };
+  }
+
+  collection(subCollectionName) {
+    return new CollectionReferenceCompat(this.clientDb, `${this.basePath}/${this.id}/${subCollectionName}`);
   }
 }
 
-// Initialize Firebase Admin SDK
-try {
-  admin.initializeApp({
-    credential: admin.cert(serviceAccount)
-  });
-  console.log('Firebase Admin SDK initialized successfully.');
-} catch (error) {
-  console.error('Error initializing Firebase Admin SDK:', error.message);
-  process.exit(1);
+class CollectionReferenceCompat {
+  constructor(clientDb, basePath) {
+    this.clientDb = clientDb;
+    this.basePath = basePath;
+    this.ref = collection(clientDb, basePath);
+    this.queryConstraints = [];
+  }
+
+  doc(id) {
+    return new DocumentReferenceCompat(this.clientDb, this.basePath, id);
+  }
+
+  async add(data) {
+    const docRef = await addDoc(this.ref, data);
+    return new DocumentReferenceCompat(this.clientDb, this.basePath, docRef.id);
+  }
+
+  orderBy(field, direction = 'asc') {
+    this.queryConstraints.push(orderBy(field, direction));
+    return this;
+  }
+
+  limit(count) {
+    this.queryConstraints.push(limit(count));
+    return this;
+  }
+
+  async get() {
+    let q = query(this.ref, ...this.queryConstraints);
+    const snap = await getDocs(q);
+    const docs = snap.docs.map(d => ({
+      id: d.id,
+      data: () => d.data()
+    }));
+    return {
+      forEach: (callback) => docs.forEach(callback),
+      docs
+    };
+  }
 }
 
 // ============================================================================
-// LOCAL DB FALLBACK SYSTEM (Self-healing in case of Firestore Quota limits)
+// LOCAL DB FALLBACK SYSTEM (Self-healing in case of connection or rule errors)
 // ============================================================================
 
 class MockDocRef {
@@ -206,20 +269,30 @@ class LocalDatabase {
 const localDbInstance = new LocalDatabase();
 let useLocalDb = false;
 
-let firestoreDb;
+// Initialize Firebase Client App and Firestore
+let firebaseApp;
+let clientDb;
+
 try {
-  firestoreDb = getFirestore();
+  firebaseApp = initializeApp(firebaseConfig);
+  clientDb = getFirestore(firebaseApp);
+  console.log('Firebase Client App and Firestore initialized successfully.');
 } catch (err) {
-  console.warn('Failed to initialize Firestore. Switched to local JSON database.');
+  console.warn('Failed to initialize Firebase Client SDK. Switched to local JSON database:', err.message);
   useLocalDb = true;
 }
 
-function isQuotaError(err) {
-  return err && err.message && (
-    err.message.includes('RESOURCE_EXHAUSTED') ||
-    err.message.includes('Quota exceeded') ||
-    err.code === 8 ||
-    err.code === 16
+function isErrorTriggeringFallback(err) {
+  if (!err) return false;
+  const msg = err.message ? err.message.toLowerCase() : '';
+  return (
+    msg.includes('resource_exhausted') ||
+    msg.includes('quota exceeded') ||
+    msg.includes('permission-denied') ||
+    msg.includes('permission denied') ||
+    msg.includes('unauthenticated') ||
+    err.code === 'permission-denied' ||
+    err.code === 'resource-exhausted'
   );
 }
 
@@ -245,8 +318,8 @@ function wrapCollectionRef(colRef, colName) {
           try {
             return await target.add(data);
           } catch (err) {
-            if (isQuotaError(err)) {
-              console.warn('Firestore add failed due to quota. Switching to local JSON database.');
+            if (isErrorTriggeringFallback(err)) {
+              console.warn('Firestore add failed. Switching to local JSON database:', err.message);
               useLocalDb = true;
               return localDbInstance.collection(colName).add(data);
             }
@@ -272,8 +345,8 @@ function wrapCollectionRef(colRef, colName) {
           try {
             return await target.get();
           } catch (err) {
-            if (isQuotaError(err)) {
-              console.warn('Firestore get failed due to quota. Switching to local JSON database.');
+            if (isErrorTriggeringFallback(err)) {
+              console.warn('Firestore get failed. Switching to local JSON database:', err.message);
               useLocalDb = true;
               return localDbInstance.collection(colName).get();
             }
@@ -311,8 +384,8 @@ function wrapDocRef(docRef, colName, docId) {
           try {
             return await target[prop](...args);
           } catch (err) {
-            if (isQuotaError(err)) {
-              console.warn(`Firestore doc.${prop} failed due to quota. Switching to local JSON database.`);
+            if (isErrorTriggeringFallback(err)) {
+              console.warn(`Firestore doc.${prop} failed. Switching to local JSON database:`, err.message);
               useLocalDb = true;
               const localDoc = localDbInstance.collection(colName).doc(docId);
               return localDoc[prop](...args);
@@ -346,8 +419,8 @@ function wrapQuery(query, colName) {
           try {
             return await target.get();
           } catch (err) {
-            if (isQuotaError(err)) {
-              console.warn('Firestore query.get failed due to quota. Switching to local JSON database.');
+            if (isErrorTriggeringFallback(err)) {
+              console.warn('Firestore query.get failed. Switching to local JSON database:', err.message);
               useLocalDb = true;
               return localDbInstance.collection(colName).get();
             }
@@ -360,6 +433,13 @@ function wrapQuery(query, colName) {
   });
 }
 
+// Compatibility DB Object
+const compatDbInstance = {
+  collection(name) {
+    return new CollectionReferenceCompat(clientDb, name);
+  }
+};
+
 // Proxy wrapper for the db object
 const db = new Proxy({}, {
   get(target, prop) {
@@ -367,20 +447,20 @@ const db = new Proxy({}, {
       return (name) => {
         if (useLocalDb) return localDbInstance.collection(name);
         try {
-          const colRef = firestoreDb.collection(name);
+          const colRef = compatDbInstance.collection(name);
           return wrapCollectionRef(colRef, name);
         } catch (err) {
-          console.warn('Firestore collection lookup failed. Switching to local JSON database.');
+          console.warn('Firestore collection lookup failed. Switching to local JSON database:', err.message);
           useLocalDb = true;
           return localDbInstance.collection(name);
         }
       };
     }
-    return useLocalDb ? localDbInstance[prop] : firestoreDb[prop];
+    return useLocalDb ? localDbInstance[prop] : compatDbInstance[prop];
   }
 });
 
 module.exports = {
-  admin,
+  admin: firebaseApp,
   db
 };
